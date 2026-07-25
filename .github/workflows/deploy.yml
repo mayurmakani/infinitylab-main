@@ -1,0 +1,67 @@
+name: Build & Deploy to Hostinger
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'   # daily 02:00 UTC — picks up newly published blog posts
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Do NOT set PUPPETEER_SKIP_DOWNLOAD here: scripts/prerender.mjs needs the
+      # Chromium that this install step downloads, and it launches with
+      # --no-sandbox, which is what makes it work on ubuntu-latest.
+      - name: Install deps (downloads Chromium for prerender)
+        run: npm ci
+
+      - name: Build (vite build + prerender)
+        run: npm run build
+
+      # If prerender silently skips, dist/ still contains the SPA shell and we
+      # would ship an 867-byte, content-free homepage to crawlers. Fail loudly
+      # instead of deploying that.
+      #
+      # The threshold is the 9 static routes in scripts/prerender.mjs, NOT the
+      # ~32 total. Blog and product pages are fetched from backend.infinityenergy.xyz
+      # at build time, so a stricter count would hard-fail whenever the backend is
+      # briefly down — the one case we explicitly want to deploy through, since the
+      # nightly run backfills. Under 9 means prerender itself did not run.
+      - name: Guard — fail if prerender did not run
+        run: |
+          COUNT=$(find dist -name '*.html' | wc -l)
+          echo "Prerendered HTML files: $COUNT"
+          if [ "$COUNT" -lt 9 ]; then
+            echo "::error::Only $COUNT HTML file(s) — prerender did not run. Refusing to deploy the SPA shell."
+            exit 1
+          fi
+          if [ "$COUNT" -lt 20 ]; then
+            echo "::warning::Only $COUNT pages — backend API likely unreachable, so blog/product pages are missing. Deploying static routes anyway; the nightly run will backfill."
+          fi
+
+      # local-dir MUST keep its trailing slash, or the action uploads the dist
+      # folder itself and nests the whole site under /dist on the server.
+      # dangerous-clean-slate stays false so a wrong remote dir cannot wipe the
+      # live site; this does a diff-based sync. Dotfiles are included by default,
+      # which matters because .htaccess carries the canonical redirect.
+      - name: Deploy dist/ to Hostinger via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./dist/
+          server-dir: ${{ secrets.FTP_REMOTE_DIR }}
+          dangerous-clean-slate: false
