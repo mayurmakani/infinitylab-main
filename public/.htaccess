@@ -8,14 +8,21 @@ RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 RewriteCond %{HTTP_HOST} !^www\. [NC]
 RewriteRule ^ https://www.%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-# 3. Serve real files and directories directly (assets, images, etc.)
+# 3. Normalise the one mixed-case path the nav still points at.
+#    The header links to /About, but the prerender only emits about.html and
+#    the server is case-sensitive, so /About would otherwise fall through to
+#    rule 6 and serve the empty SPA shell. No [NC] here on purpose: with it,
+#    /about would match its own target and loop.
+RewriteRule ^About/?$ /about [R=301,L]
+
+# 4. Serve real files and directories directly (assets, images, etc.)
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# 4. Serve prerendered HTML for clean URLs (e.g. /about -> /about.html)
+# 5. Serve prerendered HTML for clean URLs (e.g. /about -> /about.html)
 RewriteCond %{REQUEST_FILENAME}.html -f
 RewriteRule ^(.*)$ $1.html [L]
 
-# 5. Fall back to index.html for React router (client-side routing)
+# 6. Fall back to index.html for React router (client-side routing)
 RewriteRule ^ /index.html [L]
