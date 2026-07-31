@@ -11,6 +11,7 @@ import QuoteCard3 from "../components/QuoteCard3.jsx"
 import HowItWorks from "../components/HowItWorks.jsx";
 import Advantage from "../components/Advantage.jsx";
 import GigaFactory from "../components/GigaFactory.jsx";
+import CosmicEnergy from "../components/CosmicEnergy.jsx";
 import FAQ from "../components/FAQ.jsx";
 import Seo from "../components/Seo";
 
@@ -143,6 +144,9 @@ const Home = () => {
         </section>
         <section>
           <GigaFactory />
+        </section>
+        <section>
+          <CosmicEnergy />
         </section>
         <section>
           <FAQ />
